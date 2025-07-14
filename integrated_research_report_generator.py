@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 from data_analysis_agent import quick_analysis
 from data_analysis_agent.config.llm_config import LLMConfig
-from data_analysis_agent.utils.llm_helper import LLMHelper
+from data_analysis_agent.utils.llm_helper_qwen import LLMHelperQwen
 from utils.get_shareholder_info import get_shareholder_info, get_table_content
 from utils.get_financial_statements import get_all_financial_statements, save_financial_statements_to_csv
 from utils.identify_competitors import identify_competitors_with_ai
@@ -34,9 +34,13 @@ class IntegratedResearchReportGenerator:
     def __init__(self, target_company="商汤科技", target_company_code="00020", target_company_market="HK", search_engine="ddg"):
         # 环境变量与全局配置
         load_dotenv()
+        model_name = os.getenv("QWEN_MODEL_NAME", "Qwen/Qwen1.5-7B-Chat")
+
+        '''
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.model = os.getenv("OPENAI_MODEL", "gpt-4")
+        '''
         # 打印模型
         print(f"🔧 使用的模型: {self.model}")
         self.target_company = target_company
@@ -57,6 +61,7 @@ class IntegratedResearchReportGenerator:
             os.makedirs(dir_path, exist_ok=True)
         
         # LLM配置
+        '''
         self.llm_config = LLMConfig(
             api_key=self.api_key,
             base_url=self.base_url,
@@ -64,7 +69,15 @@ class IntegratedResearchReportGenerator:
             temperature=0.7,
             max_tokens=16384,
         )
-        self.llm = LLMHelper(self.llm_config)
+        '''
+        # 1024 是否太短，太长会不会被打断
+
+        self.llm = LLMHelperQwen(
+            model_name=model_name,
+            temperature=0.7,
+            max_new_tokens=1024,
+            top_p=0.9
+        )
         
         # 存储分析结果
         self.analysis_results = {}
