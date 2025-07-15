@@ -35,7 +35,7 @@ class IntegratedResearchReportGenerator:
         # 环境变量与全局配置
         load_dotenv()
         model_name = os.getenv("QWEN_MODEL_NAME", "Qwen/Qwen1.5-7B-Chat")
-
+        self.model = model_name 
         '''
         self.api_key = os.getenv("OPENAI_API_KEY")
         self.base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
