@@ -12,8 +12,9 @@ from dotenv import load_dotenv
 import importlib
 
 from data_analysis_agent import quick_analysis
-from data_analysis_agent.config.llm_config import LLMConfig
-from data_analysis_agent.utils.llm_helper import LLMHelper
+# from data_analysis_agent.config.llm_config import LLMConfig
+# from data_analysis_agent.utils.llm_helper import LLMHelper
+from data_analysis_agent.utils.llm_helper_qwen import LLMHelperQwen
 from utils.get_shareholder_info import get_shareholder_info, get_table_content
 from utils.get_financial_statements import get_all_financial_statements, save_financial_statements_to_csv
 from utils.identify_competitors import identify_competitors_with_ai
@@ -21,10 +22,18 @@ from utils.get_stock_intro import get_stock_intro, save_stock_intro_to_txt
 from duckduckgo_search import DDGS
 
 # ========== 环境变量与全局配置 ==========
+'''
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 model = os.getenv("OPENAI_MODEL", "gpt-4")
+'''
+load_dotenv()
+# Qwen 模型配置
+QWEN_MODEL_NAME = os.getenv("QWEN_MODEL_NAME", "Qwen/Qwen1.5-7B-Chat")
+MAX_NEW_TOKENS  = int(os.getenv("MAX_NEW_TOKENS", "1024"))
+QWEN_TEMPERATURE= float(os.getenv("QWEN_TEMPERATURE", "0.7"))
+QWEN_TOP_P      = float(os.getenv("QWEN_TOP_P", "0.9"))
 
 target_company = "商汤科技"
 target_company_code = "00020"
@@ -34,7 +43,7 @@ os.makedirs(data_dir, exist_ok=True)
 
 company_info_dir = "./company_info"
 os.makedirs(company_info_dir, exist_ok=True)
-
+'''
 llm_config = LLMConfig(
     api_key=api_key,
     base_url=base_url,
@@ -42,14 +51,19 @@ llm_config = LLMConfig(
     temperature=0.7,
     max_tokens=16384,
 )
+
 llm = LLMHelper(llm_config)
+'''
+llm_helper = LLMHelperQwen(
+    model_name=QWEN_MODEL_NAME,
+    max_new_tokens=MAX_NEW_TOKENS,
+    temperature=QWEN_TEMPERATURE,
+    top_p=QWEN_TOP_P,
+)
 
 # ========== 1. 获取目标公司及竞争对手的财务数据 ==========
 # 获取竞争对手列表
-other_companies = identify_competitors_with_ai(api_key=api_key,
-                                               base_url=base_url,
-                                               model_name=model,
-                                               company_name=target_company)
+other_companies = identify_competitors_with_ai(llm_helper, target_company)
 listed_companies = [company for company in other_companies if company.get('market') != "未上市"]
 
 # 获取目标公司财务数据
@@ -260,28 +274,28 @@ def format_final_reports(all_reports):
         formatted_output.append("")
     return "\n".join(formatted_output)
 
-def analyze_companies_in_directory(data_directory, llm_config, query="基于表格的数据，分析有价值的内容，并绘制相关图表。最后生成汇报给我。"):
+def analyze_companies_in_directory(data_directory, llm_helper, query="基于表格的数据，分析有价值的内容，并绘制相关图表。最后生成汇报给我。"):
     company_files = get_company_files(data_directory)
     all_reports = {}
     for company_name, files in company_files.items():
-        report = analyze_individual_company(company_name, files, llm_config, query, verbose=False)
+        report = analyze_individual_company(company_name, files, llm_helper, query, verbose=False)
         if report:
             all_reports[company_name] = report
     return all_reports
 
-def compare_two_companies(company1_name, company1_files, company2_name, company2_files, llm_config):
+def compare_two_companies(company1_name, company1_files, company2_name, company2_files, llm_helper):
     query = "基于两个公司的表格的数据，分析有共同点的部分，绘制对比分析的表格，并绘制相关图表。最后生成汇报给我。"
     all_files = company1_files + company2_files
     report = quick_analysis(
         query=query,
         files=all_files,
-        llm_config=llm_config,
+        llm_helper=llm_helper,
         absolute_path=True,
         max_rounds=20
     )
     return report
 
-def run_comparison_analysis(data_directory, target_company_name, llm_config):
+def run_comparison_analysis(data_directory, target_company_name, llm_helper):
     company_files = get_company_files(data_directory)
     if not company_files or target_company_name not in company_files:
         return {}
@@ -292,7 +306,7 @@ def run_comparison_analysis(data_directory, target_company_name, llm_config):
         report = compare_two_companies(
             target_company_name, company_files[target_company_name],
             competitor, company_files[competitor],
-            llm_config
+            llm_helper
         )
         if report:
             comparison_reports[comparison_key] = {
@@ -322,11 +336,11 @@ def get_sensetime_files(data_dir):
             sensetime_files.append(file)
     return sensetime_files
 
-def analyze_sensetime_valuation(files, llm_config):
+def analyze_sensetime_valuation(files, llm_helper):
     """分析商汤科技的估值与预测"""
     query = "基于三大表的数据，构建估值与预测模型，模拟关键变量变化对财务结果的影响,并绘制相关图表。最后生成汇报给我。"
     report = quick_analysis(
-        query=query, files=files, llm_config=llm_config, absolute_path=True, max_rounds=20
+        query=query, files=files, llm_helper=llm_helper, absolute_path=True, max_rounds=20
     )
     return report
 
@@ -344,13 +358,13 @@ if __name__ == "__main__":
     # 运行公司分析
     results = analyze_companies_in_directory(
         data_directory=data_dir, 
-        llm_config=llm_config
+        llm_helper=llm_helper
     )
     # 运行两两对比分析（以商汤科技为目标公司）
     comparison_results = run_comparison_analysis(
         data_directory=data_dir,
         target_company_name=target_company,
-        llm_config=llm_config
+        llm_helper=llm_helper
     )
     # 合并所有报告
     merged_results = merge_reports(results, comparison_results)
@@ -359,7 +373,7 @@ if __name__ == "__main__":
     sensetime_files = get_sensetime_files(data_dir)
     sensetime_valuation_report = None
     if sensetime_files:
-        sensetime_valuation_report = analyze_sensetime_valuation(sensetime_files, llm_config)
+        sensetime_valuation_report = analyze_sensetime_valuation(sensetime_files, llm_helper)
 
     # 格式化并输出最终报告
     if merged_results:

@@ -7,9 +7,10 @@ from typing import Dict, Any, List, Optional
 from .utils.create_session_dir import create_session_output_dir
 from .utils.format_execution_result import format_execution_result
 from .utils.extract_code import extract_code_from_response
-from .utils.llm_helper import LLMHelper
+#from .utils.llm_helper import LLMHelper
 from .utils.code_executor import CodeExecutor
-from .config.llm_config import LLMConfig
+from .utils.llm_helper_qwen import LLMHelperQwen
+#from .config.llm_config import LLMConfig
 from .prompts import data_analysis_system_prompt, final_report_system_prompt,final_report_system_prompt_absolute
 
 
@@ -23,7 +24,7 @@ class DataAnalysisAgent:
     - 执行代码并收集结果
     - 基于执行结果继续生成后续分析代码
     """
-    def __init__(self, llm_config: LLMConfig = None,
+    def __init__(self, llm_helper: LLMHelperQwen = None,
                  output_dir: str = "outputs",
                  max_rounds: int = 20,
                  absolute_path: bool = False):
@@ -35,9 +36,20 @@ class DataAnalysisAgent:
             output_dir: 输出目录
             max_rounds: 最大对话轮数
         """
-        self.config = llm_config or LLMConfig()
-        self.llm = LLMHelper(self.config)
+        # self.config = llm_config or LLMConfig()
+        # self.llm = LLMHelper(self.config)
+        # 如果调用时没有传入 helper，则用 Qwen 的默认配置自动创建
+        if llm_helper is None:
+            llm_helper = LLMHelperQwen(
+                model_name    = os.getenv("QWEN_MODEL_NAME", "Qwen/Qwen1.5-7B-Chat"),
+                max_new_tokens=int(os.getenv("MAX_NEW_TOKENS", "1024")),
+                temperature   = float(os.getenv("QWEN_TEMPERATURE", "0.7")),
+                top_p         = float(os.getenv("QWEN_TOP_P", "0.9")),
+            )
+        # 直接保存 helper 实例，后续全部调用 llm.generate(...)
+        self.llm = llm_helper
         self.base_output_dir = output_dir
+
         self.max_rounds = max_rounds
         # 对话历史和上下文
         self.conversation_history = []

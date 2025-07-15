@@ -19,7 +19,7 @@ import importlib
 from urllib.parse import urlparse
 
 from data_analysis_agent import quick_analysis
-from data_analysis_agent.config.llm_config import LLMConfig
+# from data_analysis_agent.config.llm_config import LLMConfig
 from data_analysis_agent.utils.llm_helper_qwen import LLMHelperQwen
 from utils.get_shareholder_info import get_shareholder_info, get_table_content
 from utils.get_financial_statements import get_all_financial_statements, save_financial_statements_to_csv
@@ -72,7 +72,7 @@ class IntegratedResearchReportGenerator:
         '''
         # 1024 是否太短，太长会不会被打断
 
-        self.llm = LLMHelperQwen(
+        self.llm_helper = LLMHelperQwen(
             model_name=model_name,
             temperature=0.7,
             max_new_tokens=1024,
@@ -216,11 +216,17 @@ class IntegratedResearchReportGenerator:
         print("\n📈 运行财务分析...")
         
         # 单公司分析
-        results = self.analyze_companies_in_directory(self.data_dir, self.llm_config)
+        # results = self.analyze_companies_in_directory(self.data_dir, self.llm_config) 
+        results = self.analyze_companies_in_directory(self.data_dir, self.llm)
         
         # 两两对比分析
+        '''
         comparison_results = self.run_comparison_analysis(
             self.data_dir, self.target_company, self.llm_config
+        )
+        '''
+        comparison_results = self.run_comparison_analysis(
+            self.data_dir, self.target_company, self.llm
         )
         
         # 合并所有报告
@@ -240,7 +246,7 @@ class IntegratedResearchReportGenerator:
         company_infos = self.llm.call(
             f"请整理以下公司信息内容，确保格式清晰易读，并保留关键信息：\n{company_infos}",
             system_prompt="你是一个专业的公司信息整理师。",
-            max_tokens=16384,
+          #  max_tokens=16384,
             temperature=0.5
         )
         
@@ -251,7 +257,7 @@ class IntegratedResearchReportGenerator:
         shareholder_analysis = self.llm.call(
             "请分析以下股东信息表格内容：\n" + table_content,
             system_prompt="你是一个专业的股东信息分析师。",
-            max_tokens=16384,
+          #  max_tokens=16384,
             temperature=0.5
         )
         
@@ -411,30 +417,30 @@ class IntegratedResearchReportGenerator:
             formatted_output.append("")
         return "\n".join(formatted_output)
     
-    def analyze_companies_in_directory(self, data_directory, llm_config, query="基于表格的数据，分析有价值的内容，并绘制相关图表。最后生成汇报给我。"):
+    def analyze_companies_in_directory(self, data_directory, llm_helper, query="基于表格的数据，分析有价值的内容，并绘制相关图表。最后生成汇报给我。"):
         """分析目录中的所有公司"""
         company_files = self.get_company_files(data_directory)
         all_reports = {}
         for company_name, files in company_files.items():
-            report = self.analyze_individual_company(company_name, files, llm_config, query, verbose=False)
+            report = self.analyze_individual_company(company_name, files, llm_helper, query, verbose=False)
             if report:
                 all_reports[company_name] = report
         return all_reports
     
-    def compare_two_companies(self, company1_name, company1_files, company2_name, company2_files, llm_config):
+    def compare_two_companies(self, company1_name, company1_files, company2_name, company2_files, llm_helper):
         """比较两个公司"""
         query = "基于两个公司的表格的数据，分析有共同点的部分，绘制对比分析的表格，并绘制相关图表。最后生成汇报给我。"
         all_files = company1_files + company2_files
         report = quick_analysis(
             query=query,
             files=all_files,
-            llm_config=llm_config,
+            llm_helper=llm_helper,
             absolute_path=True,
             max_rounds=20
         )
         return report
     
-    def run_comparison_analysis(self, data_directory, target_company_name, llm_config):
+    def run_comparison_analysis(self, data_directory, target_company_name, llm_helper):
         """运行对比分析"""
         company_files = self.get_company_files(data_directory)
         if not company_files or target_company_name not in company_files:
@@ -446,7 +452,7 @@ class IntegratedResearchReportGenerator:
             report = self.compare_two_companies(
                 target_company_name, company_files[target_company_name],
                 competitor, company_files[competitor],
-                llm_config
+                llm_helper
             )
             if report:
                 comparison_reports[comparison_key] = {
